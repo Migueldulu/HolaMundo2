@@ -17,7 +17,7 @@ android {
         versionName = "1.0"
 
         ndk {
-            abiFilters.add("arm64-v8a")  // Quest 2 usa ARM64
+            abiFilters.add("arm64-v8a")// Quest 2 usa ARM64
         }
 
         externalNativeBuild {
@@ -81,6 +81,9 @@ android {
 }
 
 dependencies {
+
+    implementation("org.khronos.openxr:openxr_loader_for_android:1.1.49")
+
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.11.0")

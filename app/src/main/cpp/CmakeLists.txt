@@ -48,7 +48,6 @@ message(STATUS "OpenXR loader encontrado: ${OPENXR_LIB}")
 # Crear la librería nativa
 add_library(holamundo_native SHARED
         native_openxr.cpp
-        # Agregar aquí más archivos .cpp si los tienes
 )
 
 # Configurar propiedades de la librería
