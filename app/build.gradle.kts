@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.example.holamundo2"
-    compileSdk = 36
+    compileSdk = 34 // Cambiado de 36 a 34 (más estable)
 
     defaultConfig {
         applicationId = "com.example.holamundo2"
@@ -22,8 +22,11 @@ android {
 
         externalNativeBuild {
             cmake {
-                cppFlags("-std=c++17")
-                arguments("-DANDROID_STL=c++_shared")
+                cppFlags("-std=c++17", "-fexceptions", "-frtti")
+                arguments(
+                    "-DANDROID_STL=c++_shared",
+                    "-DANDROID_PLATFORM=android-29"
+                )
             }
         }
     }
@@ -35,6 +38,16 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+
+            // Configuraciones específicas para Quest
+            ndk {
+                debugSymbolLevel = "SYMBOL_TABLE"
+            }
+        }
+
+        debug {
+            isDebuggable = true
+            isJniDebuggable = true
         }
     }
 
@@ -54,12 +67,15 @@ android {
         jvmTarget = "1.8"
     }
 
-    androidResources {
-        packaging {
-            resources {
-                pickFirsts.add("**/libc++_shared.so")
-                pickFirsts.add("**/libopenxr_loader.so")
-            }
+    // Corregido: Configuración de packaging actualizada
+    packaging {
+        resources {
+            pickFirsts += "**/libc++_shared.so"
+            pickFirsts += "**/libopenxr_loader.so"
+        }
+        jniLibs {
+            pickFirsts += "**/libc++_shared.so"
+            pickFirsts += "**/libopenxr_loader.so"
         }
     }
 }
@@ -67,8 +83,9 @@ android {
 dependencies {
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
-
-    // Dependencias adicionales si necesitas UI
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
+
+    // Dependencias adicionales para debugging
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
 }

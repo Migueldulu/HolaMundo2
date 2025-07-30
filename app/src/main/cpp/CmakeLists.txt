@@ -20,7 +20,7 @@ find_library(EGL-lib EGL)
 find_library(GLESv3-lib GLESv3)
 
 # Configuración de OpenXR
-set(OPENXR_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/openxr)
+set(OPENXR_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/openxr-sdk)
 
 # Verificar que existe el directorio OpenXR
 if(NOT EXISTS ${OPENXR_ROOT_DIR})
