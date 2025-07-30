@@ -9,6 +9,7 @@
 #include <vector>
 #include <string>
 #include <array>
+#include <cstring>  // AGREGADO: Para strcpy
 
 #define LOG_TAG "OpenXRHolaMundo"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -37,6 +38,19 @@ struct SwapchainInfo {
 std::vector<SwapchainInfo> swapchains;
 XrViewConfigurationView viewConfigs[2];
 
+// AGREGADO: Función para inicializar variables globales
+void initializeGlobalVariables() {
+    instance = XR_NULL_HANDLE;
+    session = XR_NULL_HANDLE;
+    appSpace = XR_NULL_HANDLE;
+    systemId = XR_NULL_SYSTEM_ID;
+    sessionState = XR_SESSION_STATE_UNKNOWN;
+    javaVm = nullptr;
+    activityObject = nullptr;
+    nativeWindow = nullptr;
+    swapchains.clear();
+}
+
 bool CheckXrResult(XrResult result, const char* operation) {
     if (XR_FAILED(result)) {
         LOGE("OpenXR Error: %s failed with result %d", operation, result);
@@ -45,9 +59,59 @@ bool CheckXrResult(XrResult result, const char* operation) {
     return true;
 }
 
+// AGREGADO: Función para verificar extensiones disponibles
+bool verifyRequiredExtensions() {
+    uint32_t extensionCount = 0;
+    if (!CheckXrResult(xrEnumerateInstanceExtensionProperties(nullptr, 0, &extensionCount, nullptr),
+                       "xrEnumerateInstanceExtensionProperties")) {
+        return false;
+    }
+
+    std::vector<XrExtensionProperties> availableExtensions(extensionCount, {XR_TYPE_EXTENSION_PROPERTIES});
+    if (!CheckXrResult(xrEnumerateInstanceExtensionProperties(nullptr, extensionCount, &extensionCount, availableExtensions.data()),
+                       "xrEnumerateInstanceExtensionProperties")) {
+        return false;
+    }
+
+    // Verificar que las extensiones requeridas estén disponibles
+    bool androidExtensionAvailable = false;
+    bool openglExtensionAvailable = false;
+
+    for (const auto& ext : availableExtensions) {
+        if (strcmp(ext.extensionName, XR_KHR_ANDROID_CREATE_INSTANCE_EXTENSION_NAME) == 0) {
+            androidExtensionAvailable = true;
+        }
+        if (strcmp(ext.extensionName, XR_KHR_OPENGL_ES_ENABLE_EXTENSION_NAME) == 0) {
+            openglExtensionAvailable = true;
+        }
+    }
+
+    if (!androidExtensionAvailable) {
+        LOGE("Extensión Android CREATE_INSTANCE no disponible");
+        return false;
+    }
+
+    if (!openglExtensionAvailable) {
+        LOGE("Extensión OpenGL ES no disponible");
+        return false;
+    }
+
+    LOGI("Extensiones requeridas verificadas correctamente");
+    return true;
+}
+
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_example_holamundo2_MainActivity_nativeInitialize(JNIEnv *env, jobject thiz) {
     LOGI("Inicializando OpenXR...");
+
+    // AGREGADO: Inicializar variables globales
+    initializeGlobalVariables();
+
+    // AGREGADO: Verificar extensiones disponibles
+    if (!verifyRequiredExtensions()) {
+        LOGE("Extensiones requeridas no están disponibles");
+        return JNI_FALSE;
+    }
 
     // Crear instancia OpenXR
     std::vector<const char*> extensions = {
@@ -61,7 +125,7 @@ Java_com_example_holamundo2_MainActivity_nativeInitialize(JNIEnv *env, jobject t
     strcpy(instanceInfo.applicationInfo.engineName, "Custom Engine");
     instanceInfo.applicationInfo.engineVersion = 1;
     instanceInfo.applicationInfo.apiVersion = XR_CURRENT_API_VERSION;
-    instanceInfo.enabledExtensionCount = extensions.size();
+    instanceInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
     instanceInfo.enabledExtensionNames = extensions.data();
 
     if (!CheckXrResult(xrCreateInstance(&instanceInfo, &instance), "xrCreateInstance")) {
@@ -84,6 +148,11 @@ Java_com_example_holamundo2_MainActivity_nativeInitialize(JNIEnv *env, jobject t
         return JNI_FALSE;
     }
 
+    if (viewCount != 2) {
+        LOGE("Se esperaban 2 vistas, pero se encontraron %d", viewCount);
+        return JNI_FALSE;
+    }
+
     LOGI("OpenXR inicializado correctamente. Views: %d", viewCount);
     return JNI_TRUE;
 }
@@ -92,11 +161,27 @@ extern "C" JNIEXPORT jboolean JNICALL
 Java_com_example_holamundo2_MainActivity_nativeCreateSession(JNIEnv *env, jobject thiz) {
     LOGI("Creando sesión OpenXR...");
 
-    // Configurar OpenGL ES binding
+    // MEJORADO: Configurar OpenGL ES binding con verificación EGL
+    EGLDisplay display = eglGetCurrentDisplay();
+    EGLContext context = eglGetCurrentContext();
+
+    if (display == EGL_NO_DISPLAY || context == EGL_NO_CONTEXT) {
+        LOGE("No hay contexto EGL válido");
+        return JNI_FALSE;
+    }
+
+    // CORREGIDO: Obtener configuración EGL actual
+    EGLConfig config;
+    EGLint numConfigs;
+    if (!eglGetConfigs(display, &config, 1, &numConfigs) || numConfigs == 0) {
+        LOGE("No se pudo obtener configuración EGL");
+        return JNI_FALSE;
+    }
+
     XrGraphicsBindingOpenGLESAndroidKHR graphicsBinding{XR_TYPE_GRAPHICS_BINDING_OPENGL_ES_ANDROID_KHR};
-    graphicsBinding.display = eglGetCurrentDisplay();
-    graphicsBinding.config = nullptr; // Se puede dejar null para configuración por defecto
-    graphicsBinding.context = eglGetCurrentContext();
+    graphicsBinding.display = display;
+    graphicsBinding.config = config;  // CORREGIDO: Ya no es nullptr
+    graphicsBinding.context = context;
 
     // Crear sesión
     XrSessionCreateInfo sessionInfo{XR_TYPE_SESSION_CREATE_INFO};
@@ -113,6 +198,33 @@ Java_com_example_holamundo2_MainActivity_nativeCreateSession(JNIEnv *env, jobjec
     spaceInfo.poseInReferenceSpace = {{0, 0, 0, 1}, {0, 0, 0}};
 
     if (!CheckXrResult(xrCreateReferenceSpace(session, &spaceInfo, &appSpace), "xrCreateReferenceSpace")) {
+        return JNI_FALSE;
+    }
+
+    // AGREGADO: Verificar formatos de swapchain soportados
+    uint32_t formatCount = 0;
+    if (!CheckXrResult(xrEnumerateSwapchainFormats(session, 0, &formatCount, nullptr),
+                       "xrEnumerateSwapchainFormats")) {
+        return JNI_FALSE;
+    }
+
+    std::vector<int64_t> formats(formatCount);
+    if (!CheckXrResult(xrEnumerateSwapchainFormats(session, formatCount, &formatCount, formats.data()),
+                       "xrEnumerateSwapchainFormats")) {
+        return JNI_FALSE;
+    }
+
+    // Buscar GL_RGBA8 en los formatos soportados
+    bool formatSupported = false;
+    for (auto format : formats) {
+        if (format == GL_RGBA8) {
+            formatSupported = true;
+            break;
+        }
+    }
+
+    if (!formatSupported) {
+        LOGE("Formato GL_RGBA8 no soportado");
         return JNI_FALSE;
     }
 
@@ -139,10 +251,19 @@ Java_com_example_holamundo2_MainActivity_nativeCreateSession(JNIEnv *env, jobjec
 
         // Obtener imágenes del swapchain
         uint32_t imageCount;
-        xrEnumerateSwapchainImages(swapchains[eye].swapchain, 0, &imageCount, nullptr);
+        if (!CheckXrResult(xrEnumerateSwapchainImages(swapchains[eye].swapchain, 0, &imageCount, nullptr),
+                           "xrEnumerateSwapchainImages")) {
+            return JNI_FALSE;
+        }
+
         swapchains[eye].images.resize(imageCount, {XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_ES_KHR});
-        xrEnumerateSwapchainImages(swapchains[eye].swapchain, imageCount, &imageCount,
-                                   reinterpret_cast<XrSwapchainImageBaseHeader*>(swapchains[eye].images.data()));
+        if (!CheckXrResult(xrEnumerateSwapchainImages(swapchains[eye].swapchain, imageCount, &imageCount,
+                                                      reinterpret_cast<XrSwapchainImageBaseHeader*>(swapchains[eye].images.data())),
+                           "xrEnumerateSwapchainImages")) {
+            return JNI_FALSE;
+        }
+
+        LOGI("Swapchain %d creado: %dx%d, %d imágenes", eye, swapchains[eye].width, swapchains[eye].height, imageCount);
     }
 
     LOGI("Sesión OpenXR creada correctamente");
@@ -159,12 +280,20 @@ Java_com_example_holamundo2_MainActivity_nativeRunFrame(JNIEnv *env, jobject thi
             auto stateEvent = reinterpret_cast<XrEventDataSessionStateChanged*>(&eventData);
             sessionState = stateEvent->state;
 
+            LOGI("Session state changed to: %d", sessionState);
+
             if (sessionState == XR_SESSION_STATE_READY) {
                 XrSessionBeginInfo beginInfo{XR_TYPE_SESSION_BEGIN_INFO};
                 beginInfo.primaryViewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
-                xrBeginSession(session, &beginInfo);
+                if (!CheckXrResult(xrBeginSession(session, &beginInfo), "xrBeginSession")) {
+                    return JNI_FALSE;
+                }
+                LOGI("Sesión OpenXR iniciada");
             } else if (sessionState == XR_SESSION_STATE_STOPPING) {
-                xrEndSession(session);
+                if (!CheckXrResult(xrEndSession(session), "xrEndSession")) {
+                    return JNI_FALSE;
+                }
+                LOGI("Sesión OpenXR terminada");
             }
         }
         result = xrPollEvent(instance, &eventData);
@@ -211,6 +340,20 @@ Java_com_example_holamundo2_MainActivity_nativeRunFrame(JNIEnv *env, jobject thi
             return JNI_FALSE;
         }
 
+        // MEJORADO: Verificar que las vistas son válidas
+        if (!(viewState.viewStateFlags & XR_VIEW_STATE_POSITION_VALID_BIT) ||
+            !(viewState.viewStateFlags & XR_VIEW_STATE_ORIENTATION_VALID_BIT)) {
+            LOGE("Vistas no válidas, saltando frame");
+            // End frame sin capas
+            XrFrameEndInfo frameEndInfo{XR_TYPE_FRAME_END_INFO};
+            frameEndInfo.displayTime = frameState.predictedDisplayTime;
+            frameEndInfo.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
+            frameEndInfo.layerCount = 0;
+            frameEndInfo.layers = nullptr;
+            xrEndFrame(session, &frameEndInfo);
+            return JNI_TRUE;
+        }
+
         // Renderizar cada ojo
         for (int eye = 0; eye < 2; eye++) {
             // Adquirir imagen del swapchain
@@ -229,24 +372,31 @@ Java_com_example_holamundo2_MainActivity_nativeRunFrame(JNIEnv *env, jobject thi
                 return JNI_FALSE;
             }
 
-            // Crear y configurar framebuffer para renderizado
+            // MEJORADO: Crear y configurar framebuffer con verificación de errores
             GLuint framebuffer;
             glGenFramebuffers(1, &framebuffer);
+            if (glGetError() != GL_NO_ERROR) {
+                LOGE("Error generando framebuffer");
+                return JNI_FALSE;
+            }
+
             glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
 
             // Attachar la textura del swapchain al framebuffer
-            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
-                                   swapchains[eye].images[imageIndex].image, 0);
+            GLuint texture = swapchains[eye].images[imageIndex].image;
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture, 0);
 
             // Verificar que el framebuffer esté completo
-            if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-                LOGE("Framebuffer no está completo para el ojo %d", eye);
+            GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+            if (status != GL_FRAMEBUFFER_COMPLETE) {
+                LOGE("Framebuffer no está completo para el ojo %d: 0x%x", eye, status);
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
                 glDeleteFramebuffers(1, &framebuffer);
                 return JNI_FALSE;
             }
 
             // Configurar viewport
-            glViewport(0, 0, swapchains[eye].width, swapchains[eye].height);
+            glViewport(0, 0, static_cast<GLsizei>(swapchains[eye].width), static_cast<GLsizei>(swapchains[eye].height));
 
             // Limpiar buffer
             glClearColor(0.0f, 0.2f, 0.0f, 1.0f); // Fondo verde oscuro
@@ -263,6 +413,12 @@ Java_com_example_holamundo2_MainActivity_nativeRunFrame(JNIEnv *env, jobject thi
             // En una implementación real, aquí renderizarías tu geometría 3D,
             // texto "Hola Mundo", etc., usando las matrices de vista y proyección
             // de views[eye].pose y views[eye].fov
+
+            // AGREGADO: Verificar errores OpenGL después del renderizado
+            GLenum glError = glGetError();
+            if (glError != GL_NO_ERROR) {
+                LOGE("Error OpenGL durante renderizado del ojo %d: 0x%x", eye, glError);
+            }
 
             // Limpiar framebuffer
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -312,29 +468,44 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_example_holamundo2_MainActivity_nativeShutdown(JNIEnv *env, jobject thiz) {
     LOGI("Cerrando OpenXR...");
 
-    // Limpiar swapchains
-    for (auto& swapchain : swapchains) {
-        if (swapchain.swapchain != XR_NULL_HANDLE) {
-            xrDestroySwapchain(swapchain.swapchain);
+    // MEJORADO: Limpiar swapchains con verificación
+    for (auto& swapchainInfo : swapchains) {
+        if (swapchainInfo.swapchain != XR_NULL_HANDLE) {
+            XrResult result = xrDestroySwapchain(swapchainInfo.swapchain);
+            if (XR_FAILED(result)) {
+                LOGE("Error destruyendo swapchain: %d", result);
+            }
         }
     }
     swapchains.clear();
 
     // Limpiar espacios y sesión
     if (appSpace != XR_NULL_HANDLE) {
-        xrDestroySpace(appSpace);
+        XrResult result = xrDestroySpace(appSpace);
+        if (XR_FAILED(result)) {
+            LOGE("Error destruyendo space: %d", result);
+        }
         appSpace = XR_NULL_HANDLE;
     }
 
     if (session != XR_NULL_HANDLE) {
-        xrDestroySession(session);
+        XrResult result = xrDestroySession(session);
+        if (XR_FAILED(result)) {
+            LOGE("Error destruyendo session: %d", result);
+        }
         session = XR_NULL_HANDLE;
     }
 
     if (instance != XR_NULL_HANDLE) {
-        xrDestroyInstance(instance);
+        XrResult result = xrDestroyInstance(instance);
+        if (XR_FAILED(result)) {
+            LOGE("Error destruyendo instance: %d", result);
+        }
         instance = XR_NULL_HANDLE;
     }
+
+    // AGREGADO: Reinicializar variables globales
+    initializeGlobalVariables();
 
     LOGI("OpenXR cerrado correctamente");
 }

@@ -25,12 +25,12 @@ find_library(OPENXR_LIB
         NO_DEFAULT_PATH)
 
 # Crear la librería nativa
-add_library(holamundo2 SHARED
+add_library(holamundo_native SHARED
         native_openxr.cpp
 )
 
 # Enlazar librerías
-target_link_libraries(holamundo2
+target_link_libraries(holamundo_native
         ${log-lib}
         ${android-lib}
         ${EGL-lib}
@@ -39,7 +39,7 @@ target_link_libraries(holamundo2
 )
 
 # Configuraciones adicionales para OpenXR
-target_compile_definitions(holamundo2 PRIVATE
+target_compile_definitions(holamundo_native PRIVATE
         XR_USE_PLATFORM_ANDROID
         XR_USE_GRAPHICS_API_OPENGL_ES
 )

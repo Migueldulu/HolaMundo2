@@ -1,0 +1,3 @@
+[submodule "pruebas/HolaMundo2"]
+	path = pruebas/HolaMundo2
+	url = https://github.com/Migueldulu/HolaMundo2
