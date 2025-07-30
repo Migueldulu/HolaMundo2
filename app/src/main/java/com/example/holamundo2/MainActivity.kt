@@ -5,10 +5,8 @@ import android.opengl.GLSurfaceView
 import android.os.Bundle
 import android.util.Log
 import android.view.WindowManager
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+// ELIMINADO: import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.*
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 
@@ -38,6 +36,9 @@ class MainActivity : Activity() {
     private var isRunning = false
     private var renderThread: Thread? = null
 
+    // Crear nuestro propio CoroutineScope para reemplazar lifecycleScope
+    private val activityScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -51,7 +52,7 @@ class MainActivity : Activity() {
             setupGLSurfaceView()
 
             // Inicializar OpenXR de forma asíncrona
-            lifecycleScope.launch {
+            activityScope.launch {  // ← Usando nuestro scope en lugar de lifecycleScope
                 initializeOpenXR()
             }
 
@@ -208,6 +209,9 @@ class MainActivity : Activity() {
         Log.d(TAG, "=== Cerrando aplicación ===")
 
         isRunning = false
+
+        // Cancelar corrutinas
+        activityScope.cancel()
 
         // Esperar a que termine el thread de renderizado
         renderThread?.let { thread ->

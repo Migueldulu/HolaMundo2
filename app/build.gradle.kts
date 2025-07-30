@@ -3,11 +3,12 @@ import com.android.build.api.dsl.Packaging
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
+    // Eliminado: alias(libs.plugins.kotlin.compose)
 }
 
 android {
     namespace = "com.example.holamundo2"
-    compileSdk = 34 // Cambiado de 36 a 34 (más estable)
+    compileSdk = 34
 
     defaultConfig {
         applicationId = "com.example.holamundo2"
@@ -17,7 +18,7 @@ android {
         versionName = "1.0"
 
         ndk {
-            abiFilters.add("arm64-v8a")// Quest 2 usa ARM64
+            abiFilters.add("arm64-v8a") // Quest 2 usa ARM64
         }
 
         externalNativeBuild {
@@ -39,7 +40,6 @@ android {
                 "proguard-rules.pro"
             )
 
-            // Configuraciones específicas para Quest
             ndk {
                 debugSymbolLevel = "SYMBOL_TABLE"
             }
@@ -67,28 +67,22 @@ android {
         jvmTarget = "1.8"
     }
 
-    // Corregido: Configuración de packaging actualizada
     packaging {
         resources {
             pickFirsts += "**/libc++_shared.so"
-            pickFirsts += "**/libopenxr_loader.so"
         }
         jniLibs {
             pickFirsts += "**/libc++_shared.so"
-            pickFirsts += "**/libopenxr_loader.so"
         }
     }
 }
 
 dependencies {
-
-    implementation("org.khronos.openxr:openxr_loader_for_android:1.1.49")
-
+    // Dependencias básicas para VR
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
-    implementation("com.google.android.material:material:1.11.0")
-    implementation("androidx.constraintlayout:constraintlayout:2.1.4")
-
-    // Dependencias adicionales para debugging
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
+
+    // Solo necesario si usas logging o utilidades adicionales
+    implementation("com.google.android.material:material:1.11.0")
 }

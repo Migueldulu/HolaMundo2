@@ -1,3 +1,88 @@
+#cmake_minimum_required(VERSION 3.22.1)
+#
+#project("holamundo2")
+#
+#set(CMAKE_CXX_STANDARD 17)
+#set(CMAKE_CXX_STANDARD_REQUIRED ON)
+#
+## Configuraciones de compilador para OpenXR
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wno-unused-parameter")
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fexceptions -frtti")
+#
+## Configuraciones específicas para Release/Debug
+#set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -DNDEBUG")
+#set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -g -DDEBUG")
+#
+## Encontrar librerías del sistema Android
+#find_library(log-lib log)
+#find_library(android-lib android)
+#find_library(EGL-lib EGL)
+#find_library(GLESv3-lib GLESv3)
+#
+## Configuración de OpenXR
+#set(OPENXR_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/openxr-sdk)
+#
+## Verificar que existe el directorio OpenXR
+#if(NOT EXISTS ${OPENXR_ROOT_DIR})
+#    message(FATAL_ERROR "OpenXR SDK no encontrado en ${OPENXR_ROOT_DIR}. "
+#            "Descarga el OpenXR SDK y extráelo en src/main/cpp/openxr/")
+#endif()
+#
+## Incluir headers de OpenXR
+#include_directories(${OPENXR_ROOT_DIR}/include)
+#
+## Buscar la librería OpenXR
+#find_library(OPENXR_LIB
+#        NAMES openxr_loader
+#        PATHS ${OPENXR_ROOT_DIR}/libs/android/${ANDROID_ABI}
+#        NO_DEFAULT_PATH
+#        REQUIRED
+#)
+#
+#if(NOT OPENXR_LIB)
+#    message(FATAL_ERROR "openxr_loader no encontrado para ${ANDROID_ABI} en ${OPENXR_ROOT_DIR}/libs/android/${ANDROID_ABI}")
+#endif()
+#
+#message(STATUS "OpenXR loader encontrado: ${OPENXR_LIB}")
+#
+## Crear la librería nativa
+#add_library(holamundo_native SHARED
+#        native_openxr.cpp
+#)
+#
+## Configurar propiedades de la librería
+#set_target_properties(holamundo_native PROPERTIES
+#        CXX_STANDARD 17
+#        CXX_STANDARD_REQUIRED ON
+#)
+#
+## Definiciones de compilador
+#target_compile_definitions(holamundo_native PRIVATE
+#        XR_USE_PLATFORM_ANDROID
+#        XR_USE_GRAPHICS_API_OPENGL_ES
+#        GL_GLEXT_PROTOTYPES
+#        EGL_EGLEXT_PROTOTYPES
+#)
+#
+## Enlazar todas las librerías necesarias
+#target_link_libraries(holamundo_native
+#        ${log-lib}
+#        ${android-lib}
+#        ${EGL-lib}
+#        ${GLESv3-lib}
+#        ${OPENXR_LIB}
+#)
+#
+## Configuraciones adicionales para debugging
+#if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+#    target_compile_definitions(holamundo_native PRIVATE DEBUG_BUILD)
+#endif()
+#
+## Configurar rpath para encontrar librerías compartidas
+#set_target_properties(holamundo_native PROPERTIES
+#        INSTALL_RPATH_USE_LINK_PATH TRUE
+#)
+
 cmake_minimum_required(VERSION 3.22.1)
 
 project("holamundo2")
@@ -24,26 +109,27 @@ set(OPENXR_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/openxr-sdk)
 
 # Verificar que existe el directorio OpenXR
 if(NOT EXISTS ${OPENXR_ROOT_DIR})
-    message(FATAL_ERROR "OpenXR SDK no encontrado en ${OPENXR_ROOT_DIR}. "
-            "Descarga el OpenXR SDK y extráelo en src/main/cpp/openxr/")
+    message(FATAL_ERROR "OpenXR SDK no encontrado en ${OPENXR_ROOT_DIR}")
 endif()
 
 # Incluir headers de OpenXR
 include_directories(${OPENXR_ROOT_DIR}/include)
 
-# Buscar la librería OpenXR
-find_library(OPENXR_LIB
-        NAMES openxr_loader
-        PATHS ${OPENXR_ROOT_DIR}/libs/android/${ANDROID_ABI}
-        NO_DEFAULT_PATH
-        REQUIRED
-)
+# Ruta específica de la librería
+set(OPENXR_LIB_PATH ${OPENXR_ROOT_DIR}/libs/android/${ANDROID_ABI}/libopenxr_loader.so)
 
-if(NOT OPENXR_LIB)
-    message(FATAL_ERROR "openxr_loader no encontrado para ${ANDROID_ABI} en ${OPENXR_ROOT_DIR}/libs/android/${ANDROID_ABI}")
+# Verificar que existe la librería
+if(NOT EXISTS ${OPENXR_LIB_PATH})
+    message(FATAL_ERROR "libopenxr_loader.so no encontrado en ${OPENXR_LIB_PATH}")
 endif()
 
-message(STATUS "OpenXR loader encontrado: ${OPENXR_LIB}")
+# Importar la librería precompilada
+add_library(openxr_loader SHARED IMPORTED)
+set_target_properties(openxr_loader PROPERTIES
+        IMPORTED_LOCATION ${OPENXR_LIB_PATH}
+)
+
+message(STATUS "OpenXR loader encontrado: ${OPENXR_LIB_PATH}")
 
 # Crear la librería nativa
 add_library(holamundo_native SHARED
@@ -70,7 +156,7 @@ target_link_libraries(holamundo_native
         ${android-lib}
         ${EGL-lib}
         ${GLESv3-lib}
-        ${OPENXR_LIB}
+        openxr_loader  # Usar la librería importada
 )
 
 # Configuraciones adicionales para debugging
