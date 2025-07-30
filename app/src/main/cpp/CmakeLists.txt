@@ -1,0 +1,45 @@
+cmake_minimum_required(VERSION 3.22.1)
+
+project("holamundo2")
+
+set(CMAKE_CXX_STANDARD 17)
+
+# Desactivar warnings específicos para código JNI
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-return-type -Wno-unknown-pragmas")
+
+# Encontrar paquetes necesarios
+find_library(log-lib log)
+find_library(android-lib android)
+find_library(EGL-lib EGL)
+find_library(GLESv3-lib GLESv3)
+
+# Incluir directorios de OpenXR
+# Necesitarás descargar el OpenXR SDK y colocarlo en src/main/cpp/openxr/
+set(OPENXR_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/openxr)
+include_directories(${OPENXR_ROOT_DIR}/include)
+
+# Buscar la librería OpenXR
+find_library(OPENXR_LIB
+        NAMES openxr_loader
+        PATHS ${OPENXR_ROOT_DIR}/libs/android/${ANDROID_ABI}
+        NO_DEFAULT_PATH)
+
+# Crear la librería nativa
+add_library(holamundo2 SHARED
+        native_openxr.cpp
+)
+
+# Enlazar librerías
+target_link_libraries(holamundo2
+        ${log-lib}
+        ${android-lib}
+        ${EGL-lib}
+        ${GLESv3-lib}
+        ${OPENXR_LIB}
+)
+
+# Configuraciones adicionales para OpenXR
+target_compile_definitions(holamundo2 PRIVATE
+        XR_USE_PLATFORM_ANDROID
+        XR_USE_GRAPHICS_API_OPENGL_ES
+)
