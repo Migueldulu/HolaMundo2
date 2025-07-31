@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
-    <!--package="com.example.holamundo2">-->
 
     <!-- Permisos esenciales para VR -->
     <uses-permission android:name="android.permission.CAMERA" />
@@ -41,21 +40,22 @@
         android:label="@string/app_name"
         android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
         android:hardwareAccelerated="true"
-        android:extractNativeLibs="true"
         tools:targetApi="34">
 
-        <!-- Metadatos para Oculus/Meta Quest -->
-        <meta-data android:name="com.oculus.supportedDevices" android:value="quest|quest2|quest3|questpro" />
+        <!-- METADATOS PARA OPENXR -->
+        <meta-data android:name="com.oculus.supportedDevices" android:value="quest2|quest3|questpro" />
         <meta-data android:name="com.oculus.intent.category.VR" android:value="vr_only" />
         <meta-data android:name="com.oculus.vr.focusaware" android:value="true" />
+
+        <!-- Metadatos específicos para OpenXR -->
+        <meta-data android:name="com.oculus.application.mode" android:value="vr" />
+
+        <!-- Especificar que queremos usar OpenXR -->
+        <meta-data android:name="com.oculus.vr.runtime" android:value="openxr" />
 
         <!-- Configuraciones de tracking -->
         <meta-data android:name="com.oculus.handtracking.supported" android:value="false" />
         <meta-data android:name="com.oculus.handtracking.version" android:value="V2.0" />
-
-        <!-- Configuraciones de rendimiento -->
-        <meta-data android:name="com.oculus.application.mode" android:value="vr" />
-        <meta-data android:name="com.oculus.supportedDevices" android:value="quest|quest2|quest3|questpro" />
 
         <activity
             android:name=".MainActivity"
@@ -69,6 +69,7 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
                 <category android:name="com.oculus.intent.category.VR" />
+                <category android:name="org.khronos.openxr.intent.category.IMMERSIVE_HMD" />
             </intent-filter>
         </activity>
     </application>

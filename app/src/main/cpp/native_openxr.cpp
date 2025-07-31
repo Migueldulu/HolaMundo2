@@ -171,10 +171,50 @@ extern "C" JNIEXPORT jboolean JNICALL
 Java_com_example_holamundo2_MainActivity_nativeInitialize(JNIEnv *env, jobject thiz) {
     LOGI("=== Inicializando OpenXR ===");
 
+    // Verificar contexto OpenGL - DEBE estar disponible ahora
+    EGLDisplay display = eglGetCurrentDisplay();
+    EGLContext context = eglGetCurrentContext();
+
+    LOGI("Verificando contexto OpenGL...");
+    LOGI("EGL Display: %p", display);
+    LOGI("EGL Context: %p", context);
+
+    if (display == EGL_NO_DISPLAY) {
+        LOGE("CRÍTICO: No hay display EGL válido para OpenXR");
+        return JNI_FALSE;
+    }
+
+    if (context == EGL_NO_CONTEXT) {
+        LOGE("CRÍTICO: No hay contexto EGL válido para OpenXR");
+        return JNI_FALSE;
+    }
+
+    // Verificar que el contexto está activo
+    EGLDisplay currentDisplay = eglGetCurrentDisplay();
+    EGLContext currentContext = eglGetCurrentContext();
+
+    if (currentDisplay != display || currentContext != context) {
+        LOGI("Contexto no está activo, activándolo...");
+        EGLSurface currentSurface = eglGetCurrentSurface(EGL_DRAW);
+        if (!eglMakeCurrent(display, currentSurface, currentSurface, context)) {
+            LOGE("No se pudo activar contexto OpenGL");
+            return JNI_FALSE;
+        }
+    }
+
+    // Verificar versión OpenGL
+    const char* version = (const char*)glGetString(GL_VERSION);
+    const char* vendor = (const char*)glGetString(GL_VENDOR);
+    const char* renderer = (const char*)glGetString(GL_RENDERER);
+
+    LOGI("✓ Contexto OpenGL verificado:");
+    LOGI("  Version: %s", version ? version : "unknown");
+    LOGI("  Vendor: %s", vendor ? vendor : "unknown");
+    LOGI("  Renderer: %s", renderer ? renderer : "unknown");
+
     // Reset del estado
     g_openxrState.reset();
     cleanupSwapchains();
-
     try {
         // Verificar extensiones disponibles
         if (!verifyRequiredExtensions()) {
